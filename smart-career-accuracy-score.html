@@ -588,8 +588,14 @@ async function sendToZapier(){
   };
 
   try {
+    // mode: 'no-cors' matches the DT's own fetch call - Zapier's Catch Hook endpoint doesn't
+    // answer the CORS preflight browsers require for a normal JSON POST, so without this flag
+    // the browser blocks the request before it's ever sent (silently, with no visible error to
+    // the candidate). no-cors skips the preflight and fires the request; we can't read the
+    // response back (it comes back "opaque"), but Zapier still receives and processes it fine.
     await fetch(WEBHOOK_URL, {
       method: 'POST',
+      mode: 'no-cors',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(flatPayload)
     });
