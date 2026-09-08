@@ -486,7 +486,7 @@ function renderResults(){
 }
 
 /* ---------------- SUBMIT ---------------- */
-function submitAndShowResults(){
+async function submitAndShowResults(){
   const name = document.getElementById('input-name').value.trim();
   const email = document.getElementById('input-email').value.trim();
   if (!name || !email){
@@ -496,7 +496,7 @@ function submitAndShowResults(){
   candidateName = name;
   candidateEmail = email;
   renderResults();
-  sendToZapier();
+  await sendToZapier();
 }
 
 function buildResultsEmailHTML(payload){
@@ -524,9 +524,11 @@ function buildResultsEmailHTML(payload){
   </table>`;
 }
 
-function sendToZapier(){
+async function sendToZapier(){
   if (!lastResults) return;
   const band = bandInfo(lastResults.pct);
+  // Keep a nested version around for buildResultsEmailHTML() and the on-screen render, which
+  // both expect stageResults/keyFocusAreas as structured data.
   const payload = {
     project: "SMART Career Accuracy Score",
     candidateName, candidateEmail,
@@ -545,15 +547,56 @@ function sendToZapier(){
     statusEl.textContent = 'Result ready - webhook not yet configured (dev mode).';
     return;
   }
-  fetch(WEBHOOK_URL, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(payload)
-  }).then(() => {
+
+  // PDF attachment, base64-encoded - same approach as the DT's Zap, so Zapier can attach it
+  // directly to the candidate's email instead of relying on the on-page download button.
+  let pdfBase64 = '', pdfFilename = '';
+  try {
+    const doc = await buildPDFDoc();
+    const dataUri = doc.output('datauristring');
+    pdfBase64 = dataUri.split(',')[1] || '';
+    pdfFilename = 'SMART-Career-Accuracy-Score-' + (candidateName || 'Result').replace(/[^a-z0-9]+/gi, '-') + '.pdf';
+  } catch (err) { /* PDF attach is best-effort - still send the score data if it fails */ }
+
+  const focus = payload.keyFocusAreas;
+  const stages = payload.stageResults;
+
+  // Flat, single-level fields - deliberately matching the DT's Zapier webhook pattern
+  // (flat keys, not nested objects/arrays) so Zapier's field picker can map each one
+  // individually into the email template and the Google Sheet columns.
+  const flatPayload = {
+    timestamp: new Date().toISOString(),
+    project: 'SMART Career Accuracy Score',
+    name: candidateName,
+    email: candidateEmail,
+    date: payload.date,
+    total_score: payload.overall,
+    max_score: payload.max,
+    pct_score: payload.pct,
+    band: band.label,
+    start_plan_score: stages[0] ? stages[0].score : '',
+    market_yourself_score: stages[1] ? stages[1].score : '',
+    range_of_options_score: stages[2] ? stages[2].score : '',
+    reevaluate_score: stages[3] ? stages[3].score : '',
+    agreement_score: stages[4] ? stages[4].score : '',
+    lowest_step_1: focus[0] ? focus[0].text : '',
+    lowest_step_2: focus[1] ? focus[1].text : '',
+    lowest_step_3: focus[2] ? focus[2].text : '',
+    pdf_filename: pdfFilename,
+    pdf_base64: pdfBase64,
+    email_html: payload.email_html
+  };
+
+  try {
+    await fetch(WEBHOOK_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(flatPayload)
+    });
     statusEl.textContent = 'Result sent to Adrian. He will follow up to walk through your weakest stage.';
-  }).catch(() => {
+  } catch (err) {
     statusEl.textContent = 'Result calculated - there was an issue sending it automatically.';
-  });
+  }
 }
 
 /* ---------------- PDF EXPORT ---------------- */
@@ -566,8 +609,7 @@ function loadImageAspect(src){
   });
 }
 
-async function downloadPDF(){
-  if (!lastResults) return;
+async function buildPDFDoc(){
   const { jsPDF } = window.jspdf;
   const doc = new jsPDF({ unit: 'pt', format: 'a4' });
   const navy = [41,36,92], orange = [233,118,27];
@@ -655,6 +697,12 @@ async function downloadPDF(){
   y += 26;
   doc.text('Adrian Evans   |   The Executive Advantage   |   adrian@adrianevans.co.uk', 40, y);
 
+  return doc;
+}
+
+async function downloadPDF(){
+  if (!lastResults) return;
+  const doc = await buildPDFDoc();
   doc.save('SMART-Career-Accuracy-Score-' + (candidateName || 'Result').replace(/\s+/g,'-') + '.pdf');
 }
 
