@@ -500,11 +500,34 @@ async function submitAndShowResults(){
 }
 
 function buildResultsEmailHTML(payload){
-  const rows = payload.stageResults.map(sr => `
-    <tr>
-      <td style="padding:6px 0;font-size:13px;color:#29245c;font-weight:bold;">${sr.code} - ${sr.title}</td>
-      <td style="padding:6px 0;font-size:13px;text-align:right;">${sr.score} / ${sr.max} (${sr.pct}%)</td>
-    </tr>`).join('');
+  // Table-based, inline-styled layout (email-safe: no CSS variables/flexbox, two-cell
+  // tables with a bgcolor attribute for the progress bars so old Outlook renders them
+  // correctly) that mirrors the on-screen results and PDF exactly: band description,
+  // itemized per-question breakdown with weight tags and a RAG-colored bar per stage,
+  // and a stage total line - not just the stage summary rows shown previously.
+  const stagesHtml = payload.stageResults.map(sr => {
+    const color = sr.pct >= 80 ? '#3E8E4A' : sr.pct >= 60 ? '#C08A1E' : '#B23B3B';
+    const ragLabel = sr.pct >= 80 ? 'GREEN' : sr.pct >= 60 ? 'AMBER' : 'RED';
+    const itemsHtml = sr.items.map(it => `
+      <tr>
+        <td style="padding:3px 0;font-size:12px;color:#333;">${it.text}${it.weight > 1 ? ` <span style="color:#999;">(&times;${it.weight})</span>` : ''}</td>
+        <td style="padding:3px 0;font-size:12px;color:#333;text-align:right;white-space:nowrap;width:50px;">${it.rating} / 10</td>
+      </tr>`).join('');
+    return `
+      <table width="100%" cellpadding="0" cellspacing="0" style="margin-top:16px;">
+        <tr>
+          <td style="font-size:13px;color:#29245c;font-weight:bold;">${sr.code} - ${sr.title}</td>
+          <td style="font-size:12px;color:${color};text-align:right;white-space:nowrap;">&#9679; ${sr.pct}% &middot; ${ragLabel}</td>
+        </tr>
+      </table>
+      <table width="100%" cellpadding="0" cellspacing="0" style="margin:4px 0;"><tr>
+        <td width="${sr.pct}%" bgcolor="${color}" style="height:6px;font-size:1px;line-height:1px;">&nbsp;</td>
+        <td bgcolor="#e6e5f2" style="height:6px;font-size:1px;line-height:1px;">&nbsp;</td>
+      </tr></table>
+      <table width="100%" cellpadding="0" cellspacing="0">${itemsHtml}</table>
+      <p style="font-size:11px;color:#888;font-weight:bold;margin:4px 0 0;">STAGE TOTAL &nbsp;${sr.score} / ${sr.max}</p>`;
+  }).join('');
+
   const focus = keyFocusAreas(payload, 3).map(f => `<li style="font-size:13px;padding:3px 0;">${f.text} - ${f.rating} / 10</li>`).join('');
   return `
   <table width="100%" cellpadding="0" cellspacing="0" style="font-family:Arial,sans-serif;max-width:600px;">
@@ -513,8 +536,9 @@ function buildResultsEmailHTML(payload){
       <p style="font-size:13px;color:#444;">${payload.candidateName} - ${payload.date}</p>
       <p style="font-size:28px;color:#29245c;font-weight:bold;margin:6px 0;">${payload.overall} <span style="font-size:14px;color:#888;">/ 200</span></p>
       <p style="display:inline-block;background:#e9761b;color:#fff;padding:4px 12px;border-radius:14px;font-size:12px;font-weight:bold;">${payload.band.label}</p>
-      <table width="100%" cellpadding="0" cellspacing="0" style="margin-top:14px;">${rows}</table>
-      <div style="margin-top:14px;padding:12px;background:#f0effa;border-left:4px solid #e9761b;">
+      <p style="font-size:12px;color:#555;margin-top:10px;">${payload.band.desc}</p>
+      ${stagesHtml}
+      <div style="margin-top:16px;padding:12px;background:#f0effa;border-left:4px solid #e9761b;">
         <p style="font-size:13px;font-weight:bold;color:#29245c;margin:0 0 6px;">Key Focus Areas</p>
         <ol style="margin:0;padding-left:16px;">${focus}</ol>
       </div>
@@ -657,7 +681,13 @@ async function buildPDFDoc(){
   doc.setFillColor(...orange);
   doc.roundedRect(220, y-16, 180, 20, 8, 8, 'F');
   doc.text(band.label, 230, y-2);
-  y += 30;
+  y += 24;
+
+  doc.setFontSize(10);
+  doc.setTextColor(80,80,80);
+  const descLines = doc.splitTextToSize(band.desc, 500);
+  doc.text(descLines, 40, y);
+  y += descLines.length * 13 + 14;
 
   lastResults.stageResults.forEach(sr => {
     if (y > 740){ doc.addPage(); y = 50; }
@@ -677,12 +707,17 @@ async function buildPDFDoc(){
     doc.setTextColor(60,60,80);
     sr.items.forEach(it => {
       if (y > 760){ doc.addPage(); y = 50; }
-      const lines = doc.splitTextToSize(it.text, 420);
+      const weightTag = it.weight > 1 ? ` (x${it.weight})` : '';
+      const lines = doc.splitTextToSize(it.text + weightTag, 420);
       doc.text(lines, 44, y);
       doc.text(`${it.rating}/10`, 500, y);
       y += lines.length * 11 + 4;
     });
-    y += 10;
+    if (y > 760){ doc.addPage(); y = 50; }
+    doc.setFontSize(9);
+    doc.setTextColor(110,110,110);
+    doc.text(`STAGE TOTAL  ${sr.score} / ${sr.max}`, 44, y);
+    y += 20;
   });
 
   if (y > 700){ doc.addPage(); y = 50; }
