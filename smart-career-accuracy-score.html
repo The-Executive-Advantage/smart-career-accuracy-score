@@ -548,13 +548,14 @@ async function sendToZapier(){
     return;
   }
 
-  // PDF attachment, base64-encoded - same approach as the DT's Zap, so Zapier can attach it
-  // directly to the candidate's email instead of relying on the on-page download button.
+  // PDF attachment, sent as a full data URI (not stripped base64) - Zapier's attachment
+  // fields recognize "data:mimetype;base64,..." directly and decode it into a real file.
+  // Sending only the stripped base64 (previous approach) caused Zapier to attach it as a
+  // plain .txt file containing the raw base64 text instead of a real PDF.
   let pdfBase64 = '', pdfFilename = '';
   try {
     const doc = await buildPDFDoc();
-    const dataUri = doc.output('datauristring');
-    pdfBase64 = dataUri.split(',')[1] || '';
+    pdfBase64 = doc.output('datauristring');
     pdfFilename = 'SMART-Career-Accuracy-Score-' + (candidateName || 'Result').replace(/[^a-z0-9]+/gi, '-') + '.pdf';
   } catch (err) { /* PDF attach is best-effort - still send the score data if it fails */ }
 
