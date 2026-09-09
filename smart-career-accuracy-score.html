@@ -508,11 +508,24 @@ function buildResultsEmailHTML(payload){
   const stagesHtml = payload.stageResults.map(sr => {
     const color = sr.pct >= 80 ? '#3E8E4A' : sr.pct >= 60 ? '#C08A1E' : '#B23B3B';
     const ragLabel = sr.pct >= 80 ? 'GREEN' : sr.pct >= 60 ? 'AMBER' : 'RED';
-    const itemsHtml = sr.items.map(it => `
+    const itemsHtml = sr.items.map(it => {
+      // Per-question mini bar - matches the on-screen 60px-wide/6px-tall .minibar/.minibar-fill
+      // (light-gray track, orange fill), built as a fixed-width nested two-cell bgcolor table
+      // so it renders consistently across email clients including old Outlook.
+      const fillW = Math.round((it.rating/10)*60);
+      const trackW = 60 - fillW;
+      const miniBar = `
+        <table width="60" cellpadding="0" cellspacing="0" style="width:60px;"><tr>
+          ${fillW > 0 ? `<td width="${fillW}" bgcolor="#e9761b" style="height:6px;font-size:1px;line-height:1px;">&nbsp;</td>` : ''}
+          ${trackW > 0 ? `<td width="${trackW}" bgcolor="#e0dfec" style="height:6px;font-size:1px;line-height:1px;">&nbsp;</td>` : ''}
+        </tr></table>`;
+      return `
       <tr>
         <td style="padding:3px 0;font-size:12px;color:#333;">${it.text}${it.weight > 1 ? ` <span style="color:#999;">(&times;${it.weight})</span>` : ''}</td>
+        <td style="padding:3px 8px;width:60px;">${miniBar}</td>
         <td style="padding:3px 0;font-size:12px;color:#333;text-align:right;white-space:nowrap;width:50px;">${it.rating} / 10</td>
-      </tr>`).join('');
+      </tr>`;
+    }).join('');
     return `
       <table width="100%" cellpadding="0" cellspacing="0" style="margin-top:16px;">
         <tr>
@@ -708,8 +721,15 @@ async function buildPDFDoc(){
     sr.items.forEach(it => {
       if (y > 760){ doc.addPage(); y = 50; }
       const weightTag = it.weight > 1 ? ` (x${it.weight})` : '';
-      const lines = doc.splitTextToSize(it.text + weightTag, 420);
+      const lines = doc.splitTextToSize(it.text + weightTag, 390);
       doc.text(lines, 44, y);
+      // Per-question mini bar - matches the on-screen 60px-wide/6px-tall .minibar/.minibar-fill
+      const barX = 445, barW = 45, barH = 5, barY = y - 8;
+      doc.setFillColor(230,230,240);
+      doc.rect(barX, barY, barW, barH, 'F');
+      doc.setFillColor(233,118,27);
+      doc.rect(barX, barY, barW * (it.rating/10), barH, 'F');
+      doc.setTextColor(60,60,80);
       doc.text(`${it.rating}/10`, 500, y);
       y += lines.length * 11 + 4;
     });
