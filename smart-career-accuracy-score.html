@@ -419,9 +419,9 @@ function bandInfo(pct){
   // Note: no per-band "color" field here - the band pill is always solid orange by design
   // (.band-pill{background:var(--orange)}), matching the DT. A per-band color was tried and
   // dropped as dead weight since nothing ever read it.
-  if (pct >= 80) return { label: 'STRONG POSITION', desc: 'Your career move is well-planned and well-positioned. Focus on tightening the few remaining gaps below.' };
-  if (pct >= 60) return { label: 'WORKABLE - NEEDS TIGHTENING', desc: 'You have a reasonable foundation, but several gaps could cost you leverage or earnings if left unaddressed.' };
-  return { label: 'High Risk of not achieving Appropriate Reward', desc: 'Significant gaps in your plan put both the accuracy of this move and your earning potential at risk.' };
+  if (pct >= 80) return { label: 'STRONG POSITION TO ACHIEVE APPROPRIATE REWARD', desc: 'Your career move is well-planned and well-positioned. Focus on tightening the few remaining gaps below.' };
+  if (pct >= 60) return { label: 'WORKABLE - NEEDS TIGHTENING TO ACHIEVE APPROPRIATE REWARD', desc: 'You have a reasonable foundation, but several gaps could cost you leverage or earnings if left unaddressed.' };
+  return { label: 'HIGH RISK OF NOT ACHIEVING APPROPRIATE REWARD', desc: 'Significant gaps in your plan put both the accuracy of this move and your earning potential at risk.' };
 }
 
 function keyFocusAreas(results, n){
