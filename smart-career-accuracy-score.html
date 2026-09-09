@@ -96,7 +96,6 @@
   .btn-primary{background:var(--orange);color:#fff;}
   .btn-secondary{background:none;border:1.5px solid var(--border);color:var(--ink);}
   .btn-block{width:100%;}
-  .center{text-align:center;}
   .hidden{display:none !important;}
   .reminder-box{
     font-size:13px;color:var(--muted);margin:-8px 0 20px;
@@ -264,10 +263,10 @@ const stages = [
     ]
   },
   {
-    code: "M", title: "Market Yourself As A Premium Employee",
+    code: "M", title: "Market Yourself As Premium",
     tagline: "Position yourself for higher-value opportunities, greater influence, and increased earning potential.",
     items: [
-      { text: "I know the KPI’s for this role and how I will make a wider organizational impact.", w: 1 },
+      { text: "I know the KPIs for this role and how I will make a wider organisational impact.", w: 1 },
       { text: "I have a compelling message to ensure I am positioned effectively as premium.", w: 2 },
       { text: "I know what salary, bonus and package I will request as appropriate reward.", w: 3 },
       { text: "I have confirmed the difference between an acceptable, an unacceptable, and a stellar offer.", w: 2 },
@@ -291,7 +290,7 @@ const stages = [
     ]
   },
   {
-    code: "T", title: "Together, Have You Reached An Agreement?",
+    code: "T", title: "Together Reached Agreement",
     tagline: "Success accelerates when all stakeholders commit to aligned outcomes.",
     items: [
       { text: "I will ensure I have a written record of all the verbal commitments and that they are reflected in the contract of employment.", w: 1 },
@@ -417,9 +416,12 @@ function ragLabel(pct){
   return 'RED';
 }
 function bandInfo(pct){
-  if (pct >= 80) return { label: 'STRONG POSITION', color: '#3E8E4A', desc: 'Your career move is well-planned and well-positioned. Focus on tightening the few remaining gaps below.' };
-  if (pct >= 60) return { label: 'WORKABLE - NEEDS TIGHTENING', color: '#C08A1E', desc: 'You have a reasonable foundation, but several gaps could cost you leverage or earnings if left unaddressed.' };
-  return { label: 'HIGH RISK', color: '#B23B3B', desc: 'Significant gaps in your plan put both the accuracy of this move and your earning potential at risk.' };
+  // Note: no per-band "color" field here - the band pill is always solid orange by design
+  // (.band-pill{background:var(--orange)}), matching the DT. A per-band color was tried and
+  // dropped as dead weight since nothing ever read it.
+  if (pct >= 80) return { label: 'STRONG POSITION', desc: 'Your career move is well-planned and well-positioned. Focus on tightening the few remaining gaps below.' };
+  if (pct >= 60) return { label: 'WORKABLE - NEEDS TIGHTENING', desc: 'You have a reasonable foundation, but several gaps could cost you leverage or earnings if left unaddressed.' };
+  return { label: 'High Risk of not achieving Appropriate Reward', desc: 'Significant gaps in your plan put both the accuracy of this move and your earning potential at risk.' };
 }
 
 function keyFocusAreas(results, n){
@@ -749,7 +751,7 @@ async function buildPDFDoc(){
     doc.setTextColor(60,60,80);
     sr.items.forEach(it => {
       if (y > 760){ doc.addPage(); y = 50; }
-      const weightTag = it.weight > 1 ? ` (x${it.weight})` : '';
+      const weightTag = it.weight > 1 ? ` (×${it.weight})` : '';
       const lines = doc.splitTextToSize(it.text + weightTag, 390);
       doc.text(lines, 44, y);
       // Per-question mini bar - matches the on-screen 60px-wide/6px-tall .minibar/.minibar-fill
@@ -796,12 +798,6 @@ async function downloadPDF(){
   if (!lastResults) return;
   const doc = await buildPDFDoc();
   doc.save('SMART-Career-Accuracy-Score-' + (candidateName || 'Result').replace(/\s+/g,'-') + '.pdf');
-}
-
-function hexToRgb(hex){
-  hex = hex.replace('#','');
-  const bigint = parseInt(hex, 16);
-  return [(bigint>>16)&255, (bigint>>8)&255, bigint&255];
 }
 </script>
 </body>
