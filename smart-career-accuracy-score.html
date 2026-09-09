@@ -548,14 +548,16 @@ async function sendToZapier(){
     return;
   }
 
-  // PDF attachment, sent as a full data URI (not stripped base64) - Zapier's attachment
-  // fields recognize "data:mimetype;base64,..." directly and decode it into a real file.
-  // Sending only the stripped base64 (previous approach) caused Zapier to attach it as a
-  // plain .txt file containing the raw base64 text instead of a real PDF.
-  let pdfBase64 = '', pdfFilename = '';
+  // PDF attachment, sent as a real file upload (multipart/form-data) instead of base64 text.
+  // Two earlier attempts (stripped base64, then a full data URI string) both failed because
+  // Zapier's attachment field doesn't decode base64 text on its own - it just stores whatever
+  // text it's given as a plain .txt file. Sending the PDF as an actual file part of a
+  // multipart form submission makes Zapier's Catch Hook expose it as a genuine File field,
+  // which the Email by Zapier Attachment field can then use directly as a real PDF.
+  let pdfBlob = null, pdfFilename = '';
   try {
     const doc = await buildPDFDoc();
-    pdfBase64 = doc.output('datauristring');
+    pdfBlob = doc.output('blob');
     pdfFilename = 'SMART-Career-Accuracy-Score-' + (candidateName || 'Result').replace(/[^a-z0-9]+/gi, '-') + '.pdf';
   } catch (err) { /* PDF attach is best-effort - still send the score data if it fails */ }
 
@@ -564,41 +566,40 @@ async function sendToZapier(){
 
   // Flat, single-level fields - deliberately matching the DT's Zapier webhook pattern
   // (flat keys, not nested objects/arrays) so Zapier's field picker can map each one
-  // individually into the email template and the Google Sheet columns.
-  const flatPayload = {
-    timestamp: new Date().toISOString(),
-    project: 'SMART Career Accuracy Score',
-    name: candidateName,
-    email: candidateEmail,
-    date: payload.date,
-    total_score: payload.overall,
-    max_score: payload.max,
-    pct_score: payload.pct,
-    band: band.label,
-    start_plan_score: stages[0] ? stages[0].score : '',
-    market_yourself_score: stages[1] ? stages[1].score : '',
-    range_of_options_score: stages[2] ? stages[2].score : '',
-    reevaluate_score: stages[3] ? stages[3].score : '',
-    agreement_score: stages[4] ? stages[4].score : '',
-    lowest_step_1: focus[0] ? focus[0].text : '',
-    lowest_step_2: focus[1] ? focus[1].text : '',
-    lowest_step_3: focus[2] ? focus[2].text : '',
-    pdf_filename: pdfFilename,
-    pdf_base64: pdfBase64,
-    email_html: payload.email_html
-  };
+  // individually into the email template and the Google Sheet columns. Sent as a FormData
+  // object (not JSON) so the PDF can ride along as a real file part - see note above.
+  const form = new FormData();
+  form.append('timestamp', new Date().toISOString());
+  form.append('project', 'SMART Career Accuracy Score');
+  form.append('name', candidateName);
+  form.append('email', candidateEmail);
+  form.append('date', payload.date);
+  form.append('total_score', payload.overall);
+  form.append('max_score', payload.max);
+  form.append('pct_score', payload.pct);
+  form.append('band', band.label);
+  form.append('start_plan_score', stages[0] ? stages[0].score : '');
+  form.append('market_yourself_score', stages[1] ? stages[1].score : '');
+  form.append('range_of_options_score', stages[2] ? stages[2].score : '');
+  form.append('reevaluate_score', stages[3] ? stages[3].score : '');
+  form.append('agreement_score', stages[4] ? stages[4].score : '');
+  form.append('lowest_step_1', focus[0] ? focus[0].text : '');
+  form.append('lowest_step_2', focus[1] ? focus[1].text : '');
+  form.append('lowest_step_3', focus[2] ? focus[2].text : '');
+  form.append('pdf_filename', pdfFilename);
+  form.append('email_html', payload.email_html);
+  if (pdfBlob) form.append('pdf_file', pdfBlob, pdfFilename);
 
   try {
     // mode: 'no-cors' matches the DT's own fetch call - Zapier's Catch Hook endpoint doesn't
-    // answer the CORS preflight browsers require for a normal JSON POST, so without this flag
-    // the browser blocks the request before it's ever sent (silently, with no visible error to
-    // the candidate). no-cors skips the preflight and fires the request; we can't read the
-    // response back (it comes back "opaque"), but Zapier still receives and processes it fine.
+    // answer the CORS preflight browsers require for certain POST requests, so without this
+    // flag the browser can block the request before it's ever sent (silently, with no visible
+    // error to the candidate). No Content-Type header is set here - the browser generates the
+    // correct multipart/form-data boundary automatically when the body is a FormData object.
     await fetch(WEBHOOK_URL, {
       method: 'POST',
       mode: 'no-cors',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(flatPayload)
+      body: form
     });
     statusEl.textContent = 'Result sent to Adrian. He will follow up to walk through your weakest stage.';
   } catch (err) {
