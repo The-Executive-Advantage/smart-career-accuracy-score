@@ -425,14 +425,18 @@ function bandInfo(pct){
 }
 
 function keyFocusAreas(results, n){
+  // Ranked by the lowest raw score first (not a weight-adjusted "gap") so a genuinely low
+  // answer like 6/10 always outranks a higher answer like 8/10, regardless of weight. Weight
+  // is used only to break a tie between two equally-low scores (the more heavily weighted one
+  // surfaces first, since it matters more to the overall result).
   const all = [];
   results.stageResults.forEach(sr => {
     sr.items.forEach(it => {
-      all.push({ text: it.text, rating: it.rating, gap: (10 - it.rating) * it.weight, stage: sr.title });
+      all.push({ text: it.text, rating: it.rating, weight: it.weight, stage: sr.title });
     });
   });
-  all.sort((a,b) => b.gap - a.gap);
-  return all.filter(a => a.gap > 0).slice(0, n);
+  all.sort((a,b) => a.rating - b.rating || b.weight - a.weight);
+  return all.filter(a => a.rating < 10).slice(0, n);
 }
 
 /* ---------------- RESULTS RENDER ---------------- */
